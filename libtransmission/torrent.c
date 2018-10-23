@@ -516,48 +516,6 @@ static bool tr_torrentIsSeedIdleLimitDone(tr_torrent* tor)
 ****
 ***/
 
-void tr_torrentCheckSeedLimit(tr_torrent* tor)
-{
-    TR_ASSERT(tr_isTorrent(tor));
-
-    if (!tor->isRunning || tor->isStopping || !tr_torrentIsSeed(tor))
-    {
-        return;
-    }
-
-    /* if we're seeding and reach our seed ratio limit, stop the torrent */
-    if (tr_torrentIsSeedRatioDone(tor))
-    {
-        tr_logAddTorInfo(tor, "%s", "Seed ratio reached; pausing torrent");
-
-        tor->isStopping = true;
-
-        /* maybe notify the client */
-        if (tor->ratio_limit_hit_func != NULL)
-        {
-            (*tor->ratio_limit_hit_func)(tor, tor->ratio_limit_hit_func_user_data);
-        }
-    }
-    /* if we're seeding and reach our inactiviy limit, stop the torrent */
-    else if (tr_torrentIsSeedIdleLimitDone(tor))
-    {
-        tr_logAddTorInfo(tor, "%s", "Seeding idle limit reached; pausing torrent");
-
-        tor->isStopping = true;
-        tor->finishedSeedingByIdle = true;
-
-        /* maybe notify the client */
-        if (tor->idle_limit_hit_func != NULL)
-        {
-            (*tor->idle_limit_hit_func)(tor, tor->idle_limit_hit_func_user_data);
-        }
-    }
-}
-
-/***
-****
-***/
-
 void tr_torrentSetLocalError(tr_torrent* tor, char const* fmt, ...)
 {
     TR_ASSERT(tr_isTorrent(tor));
@@ -2325,17 +2283,59 @@ void tr_torrentRecheckCompleteness(tr_torrent* tor)
                 /* if completeness was TR_LEECH then the seed limit check will have been skipped in bandwidthPulse */
                 tr_torrentCheckSeedLimit(tor);
             }
-
-            if (tr_sessionIsTorrentDoneScriptEnabled(tor->session))
-            {
-                torrentCallScript(tor, tr_sessionGetTorrentDoneScript(tor->session));
-            }
         }
 
         tr_torrentSetDirty(tor);
     }
 
     tr_torrentUnlock(tor);
+}
+
+/***
+****
+***/
+
+void tr_torrentCheckSeedLimit(tr_torrent* tor)
+{
+    TR_ASSERT(tr_isTorrent(tor));
+
+    if (!tor->isRunning || tor->isStopping || !tr_torrentIsSeed(tor))
+    {
+        return;
+    }
+
+    /* if we're seeding and reach our seed ratio limit, stop the torrent */
+    if (tr_torrentIsSeedRatioDone(tor))
+    {
+        tr_logAddTorInfo(tor, "%s", "Seed ratio reached; pausing torrent");
+
+        tor->isStopping = true;
+
+        if (tr_sessionIsTorrentDoneScriptEnabled(tor->session))
+        {
+            torrentCallScript(tor, tr_sessionGetTorrentDoneScript(tor->session));
+        }
+
+        /* maybe notify the client */
+        if (tor->ratio_limit_hit_func != NULL)
+        {
+            (*tor->ratio_limit_hit_func)(tor, tor->ratio_limit_hit_func_user_data);
+        }
+    }
+    /* if we're seeding and reach our inactiviy limit, stop the torrent */
+    else if (tr_torrentIsSeedIdleLimitDone(tor))
+    {
+        tr_logAddTorInfo(tor, "%s", "Seeding idle limit reached; pausing torrent");
+
+        tor->isStopping = true;
+        tor->finishedSeedingByIdle = true;
+
+        /* maybe notify the client */
+        if (tor->idle_limit_hit_func != NULL)
+        {
+            (*tor->idle_limit_hit_func)(tor, tor->idle_limit_hit_func_user_data);
+        }
+    }
 }
 
 /***
